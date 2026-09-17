@@ -1,0 +1,14 @@
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Node
+node_modules/
+dist/
+out/
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
+.env

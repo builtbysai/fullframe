@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 280px; padding: 16px; font: 14px system-ui, sans-serif; background: #14181f; color: #e6edf3; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h1 .dot { color: #22d3ee; }
+  p { color: #8b98a9; font-size: 12.5px; line-height: 1.5; }
+  button { width: 100%; background: #0e7490; color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 14px; cursor: pointer; margin: 10px 0; }
+  button:hover { background: #0891b2; }
+  button:disabled { opacity: 0.5; }
+  #status { min-height: 20px; font-size: 12.5px; color: #7df9ff; }
+  .note { font-size: 11.5px; color: #5c6b7f; margin-top: 10px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<h1>FullFrame<span class="dot">.</span> Capture</h1>
+<p>Full-page screenshot of the current tab — rendered in one shot, no stitching.</p>
+<button id="go">📜 Capture full page</button>
+<div id="status"></div>
+<p class="note">While capturing, Chrome shows a "FullFrame Capture is debugging this browser" bar — that's the engine handing us the page render. It goes away when done.<br><br>Tip: enable "Allow access to file URLs" on chrome://extensions if you capture local files.</p>
+<script src="popup.js"></script>
+</body>
+</html>

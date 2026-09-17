@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FullFrame Capture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; cursor: crosshair; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.35; }
+  #sel { position: absolute; border: 1.5px solid #22d3ee; background: rgba(34,211,238,0.06); display: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); }
+  #crossX, #crossY { position: absolute; background: rgba(34,211,238,0.9); display: none; pointer-events: none; }
+  #crossX { left: 0; right: 0; height: 1px; }
+  #crossY { top: 0; bottom: 0; width: 1px; }
+  #coords { position: absolute; display: none; background: rgba(10,14,20,0.92); color: #7df9ff; font: 12px/1.5 ui-monospace, monospace; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(34,211,238,0.4); pointer-events: none; white-space: nowrap; z-index: 10; }
+  #mag { position: absolute; display: none; width: 180px; height: 180px; border: 2px solid #22d3ee; border-radius: 8px; background: #000; pointer-events: none; z-index: 10; image-rendering: pixelated; }
+  #hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); color: rgba(255,255,255,0.75); font: 13px system-ui, sans-serif; background: rgba(10,14,20,0.85); padding: 8px 16px; border-radius: 20px; pointer-events: none; white-space: nowrap; }
+  #hint b { color: #7df9ff; font-weight: 600; }
+</style>
+</head>
+<body>
+<img id="bg" alt="">
+<div id="sel"></div>
+<div id="crossX"></div>
+<div id="crossY"></div>
+<div id="coords"></div>
+<canvas id="mag" width="180" height="180"></canvas>
+<div id="hint"><b>Drag</b> to select &nbsp;·&nbsp; <b>Double-click</b> full monitor &nbsp;·&nbsp; <b>Esc</b> cancel</div>
+<script src="shared.js"></script>
+<script src="overlay.js"></script>
+</body>
+</html>

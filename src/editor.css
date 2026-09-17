@@ -1,0 +1,28 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body { display: flex; flex-direction: column; background: #14181f; color: #e6edf3; font: 14px system-ui, sans-serif; }
+
+#toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #1c222c; border-bottom: 1px solid #2c3542; flex-wrap: wrap; }
+.group { display: flex; align-items: center; gap: 4px; padding-right: 10px; border-right: 1px solid #2c3542; }
+.group:last-child { border-right: none; }
+.spacer { flex: 1; }
+#toolbar button { background: #2a3340; color: #e6edf3; border: 1px solid transparent; border-radius: 8px; padding: 7px 10px; font-size: 15px; cursor: pointer; min-width: 38px; }
+#toolbar button:hover { background: #354052; }
+#toolbar button.active { background: #0e7490; border-color: #22d3ee; }
+#toolbar button.primary { background: #0e7490; font-size: 14px; }
+#toolbar button.primary:hover { background: #0891b2; }
+#toolbar button:disabled { opacity: 0.35; cursor: default; }
+#toolbar select { background: #2a3340; color: #e6edf3; border: none; border-radius: 8px; padding: 7px 6px; font-size: 13px; cursor: pointer; }
+.colors button.swatch { width: 26px; height: 26px; min-width: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.colors button.swatch.active { border-color: #fff; background: inherit; }
+
+#stage { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 24px; background: #14181f; background-image: radial-gradient(#232b38 1px, transparent 1px); background-size: 22px 22px; }
+#canvasWrap { position: relative; box-shadow: 0 8px 40px rgba(0,0,0,0.55); transform-origin: top left; }
+#cv { display: block; background: #fff; }
+#textInput { position: absolute; background: rgba(20,24,31,0.95); color: #fff; border: 1.5px solid #22d3ee; border-radius: 6px; font: 16px system-ui, sans-serif; padding: 4px 8px; resize: none; z-index: 5; }
+#empty { display: none; color: #8b98a9; font-size: 16px; margin-top: 120px; }
+
+#status { display: flex; justify-content: space-between; padding: 6px 14px; background: #1c222c; border-top: 1px solid #2c3542; color: #8b98a9; font-size: 12px; font-family: ui-monospace, monospace; }
+
+#toast { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%) translateY(20px); background: rgba(10,14,20,0.95); color: #7df9ff; border: 1px solid rgba(34,211,238,0.4); padding: 10px 20px; border-radius: 24px; font-size: 14px; opacity: 0; transition: all 0.25s; pointer-events: none; z-index: 100; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

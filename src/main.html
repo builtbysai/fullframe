@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FullFrame</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #14181f; color: #e6edf3; font: 14px system-ui, sans-serif; padding: 20px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h1 .dot { color: #22d3ee; }
+  p.sub { color: #8b98a9; font-size: 12.5px; margin-bottom: 18px; }
+  .btn { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: #1c222c; border: 1px solid #2c3542; color: #e6edf3; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; font-size: 14px; }
+  .btn:hover { background: #232c3a; border-color: #22d3ee; }
+  .btn .icon { font-size: 22px; }
+  .btn .meta { display: flex; flex-direction: column; }
+  .btn .meta small { color: #8b98a9; font-size: 12px; }
+  .btn kbd { margin-left: auto; background: #2a3340; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-family: ui-monospace, monospace; color: #7df9ff; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b98a9; margin: 18px 0 10px; }
+  #winList { max-height: 220px; overflow-y: auto; }
+  #winList .btn { padding: 10px 14px; }
+  #winList .btn .meta b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; display: block; }
+  .note { background: #1c222c; border: 1px solid #2c3542; border-radius: 12px; padding: 12px 14px; font-size: 12.5px; color: #8b98a9; line-height: 1.6; }
+  .note b { color: #7df9ff; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: rgba(10,14,20,0.95); color: #7df9ff; border: 1px solid rgba(34,211,238,0.4); padding: 10px 20px; border-radius: 24px; font-size: 14px; opacity: 0; transition: all 0.25s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<h1>FullFrame<span class="dot">.</span></h1>
+<p class="sub">Screenshots without limits.</p>
+
+<button class="btn" id="btnRegion">
+  <span class="icon">◧</span>
+  <span class="meta"><b>Capture region</b><small>Drag to select any area</small></span>
+  <kbd>PrtSc</kbd>
+</button>
+<button class="btn" id="btnFull">
+  <span class="icon">⛶</span>
+  <span class="meta"><b>Capture fullscreen</b><small>All monitors, one image</small></span>
+  <kbd>Ctrl+PrtSc</kbd>
+</button>
+<button class="btn" id="btnLong">
+  <span class="icon">📜</span>
+  <span class="meta"><b>Long screenshot</b><small>Full web page via the companion extension</small></span>
+</button>
+
+<h2>Capture a window</h2>
+<div id="winList"><p class="sub">Loading…</p></div>
+
+<h2>Long screenshots</h2>
+<div class="note">
+  Install the <b>FullFrame Capture</b> companion extension (in <b>extension/</b> — load unpacked in
+  <b>chrome://extensions</b> with Developer mode on), then click its toolbar button on any page.
+  It renders the entire page in one shot via the browser engine — no stitching, no seams.
+</div>
+
+<script src="shared.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
