@@ -100,7 +100,11 @@ artifacts, sticky elements appear exactly once. Same mechanism as DevTools'
   editor (shapes, text, blur/pixelate, crop, undo/redo); pin-to-screen;
   copy/save; tray; global hotkeys; companion extension (standalone
   full-page capture via CDP — verified seam-free on a 4800px test page)
-- [ ] v0.2 — native-messaging link between app and extension; delayed capture;
+- [x] v0.2 (in progress) — delayed capture (3/5/10 s countdown, region or
+  fullscreen); JPEG save honoring the chosen extension; extension tiled
+  fallback for pages over 16384 px (validated: seamless tiles, capped at
+  32767 px, never silently truncated)
+- [ ] v0.2 (remaining) — native-messaging link between app and extension;
   settings UI (hotkeys, save location, naming); scrolling capture of native
   windows
 - [ ] v0.3 — OCR (Tesseract on-device)

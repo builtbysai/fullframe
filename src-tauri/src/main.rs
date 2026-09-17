@@ -306,9 +306,47 @@ fn capture_fullscreen(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Delayed capture (Snipping Tool parity): count down, hide our own window so
+/// it can't photobomb the shot, then run a region or fullscreen capture.
+/// Fire-and-forget: progress arrives as `delay_tick` events (remaining secs),
+/// completion/failure as `delay_done` / `delay_error`.
+#[tauri::command]
+fn capture_delayed(app: AppHandle, kind: String, seconds: u64) {
+    let secs = seconds.clamp(1, 30);
+    std::thread::spawn(move || {
+        for remaining in (1..=secs).rev() {
+            let _ = app.emit(
+                "delay_tick",
+                serde_json::json!({ "kind": kind, "remaining": remaining }),
+            );
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        // Get our window out of the shot before capturing.
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.hide();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let _ = app.emit("delay_tick", serde_json::json!({ "kind": kind, "remaining": 0 }));
+        let res = match kind.as_str() {
+            "fullscreen" => capture_fullscreen(app.clone()),
+            _ => begin_region_capture(app.clone()),
+        };
+        match res {
+            Ok(()) => {
+                let _ = app.emit("delay_done", serde_json::json!({ "kind": kind }));
+            }
+            Err(e) => {
+                let _ = app.emit("delay_error", serde_json::json!({ "error": e }));
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                }
+            }
+        }
+    });
+}
+
 #[derive(Serialize)]
-struct WindowInfo {
-    id: u32,
+struct WindowInfo {    id: u32,
     title: String,
     app_name: String,
     width: u32,
@@ -382,9 +420,24 @@ fn copy_data_url(data_url: String) -> Result<(), String> {
 #[tauri::command]
 fn save_data_url(data_url: String, path: String) -> Result<(), String> {
     let png = png_from_data_url(&data_url)?;
-    // Trust but verify: only write real PNG bytes.
-    let _ = image::load_from_memory(&png).map_err(|e| e.to_string())?;
-    std::fs::write(&path, &png).map_err(|e| e.to_string())?;
+    let img = image::load_from_memory(&png).map_err(|e| e.to_string())?;
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if ext == "jpg" || ext == "jpeg" {
+        // JPEG has no alpha channel: composite over white first.
+        let rgb = img.to_rgb8();
+        let mut buf = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 92)
+            .encode_image(&rgb)
+            .map_err(|e| e.to_string())?;
+        std::fs::write(&path, &buf).map_err(|e| e.to_string())?;
+    } else {
+        // PNG (default): the data URL is already PNG bytes.
+        std::fs::write(&path, &png).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -491,6 +544,7 @@ fn main() {
             finish_region_capture,
             cancel_capture,
             capture_fullscreen,
+            capture_delayed,
             list_windows,
             capture_window,
             take_capture,

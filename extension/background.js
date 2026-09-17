@@ -1,11 +1,15 @@
 // FullFrame Capture — companion extension.
 // Full-page screenshot via Chrome DevTools Protocol:
 // attach debugger -> Page.getLayoutMetrics -> Page.captureScreenshot with
-// captureBeyondViewport -> detach. The browser engine renders the whole page
-// in ONE shot, so there are no stitch seams and sticky headers/footers appear
-// exactly once (unlike scroll-and-stitch tools).
+// captureBeyondViewport -> detach. The browser engine renders the page itself,
+// so there are no stitch seams and sticky headers/footers appear exactly once
+// (unlike scroll-and-stitch tools). Pages taller than Blink's 16384px single-
+// capture guardrail are captured in tiles and stitched with OffscreenCanvas —
+// never silently truncated.
 
-const MAX_DIM = 16384; // Blink image-buffer guardrail
+const SINGLE_MAX = 16384; // Blink single-capture guardrail
+const TILE = 16000;       // per-tile size, safely under the guardrail
+const CANVAS_MAX = 32767; // canvas dimension ceiling for the stitched result
 
 function sendCommand(target, method, params) {
   return new Promise((resolve, reject) => {
@@ -18,6 +22,44 @@ function sendCommand(target, method, params) {
 
 function setStatus(msg) {
   chrome.runtime.sendMessage({ kind: 'status', msg }).catch(() => {});
+}
+
+// Capture the page in tiles (each under Blink's guardrail) and stitch them
+// into one image with OffscreenCanvas. Used when a dimension exceeds what
+// a single captureScreenshot can render.
+async function captureTiled(target, width, height) {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const total = Math.ceil(width / TILE) * Math.ceil(height / TILE);
+  let n = 0;
+  for (let y = 0; y < height; y += TILE) {
+    const h = Math.min(TILE, height - y);
+    for (let x = 0; x < width; x += TILE) {
+      const w = Math.min(TILE, width - x);
+      n++;
+      setStatus(`Rendering part ${n} of ${total}…`);
+      const shot = await sendCommand(target, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: true,
+        clip: { x, y, width: w, height: h, scale: 1 },
+      });
+      const blob = await (await fetch('data:image/png;base64,' + shot.data)).blob();
+      const bmp = await createImageBitmap(blob);
+      ctx.drawImage(bmp, x, y, w, h);
+      bmp.close();
+    }
+  }
+  return canvas.convertToBlob({ type: 'image/png' });
+}
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Could not encode the stitched image.'));
+    r.readAsDataURL(blob);
+  });
 }
 
 // Scroll through the page in steps so lazy-loaded images/iframes render
@@ -76,34 +118,35 @@ async function captureFullPage(tab) {
 
     setStatus('Measuring page…');
     const metrics = await sendCommand(target, 'Page.getLayoutMetrics');
-    let { width, height } = metrics.contentSize;
-    width = Math.ceil(width);
-    height = Math.ceil(height);
-    let truncated = false;
-    if (height > MAX_DIM) {
-      height = MAX_DIM;
-      truncated = true;
-    }
-    if (width > MAX_DIM) {
-      width = MAX_DIM;
-      truncated = true;
-    }
+    let width = Math.ceil(metrics.contentSize.width);
+    let height = Math.ceil(metrics.contentSize.height);
+    let capped = false;
+    if (width > CANVAS_MAX) { width = CANVAS_MAX; capped = true; }
+    if (height > CANVAS_MAX) { height = CANVAS_MAX; capped = true; }
 
-    setStatus('Rendering full page…');
-    const shot = await sendCommand(target, 'Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width, height, scale: 1 },
-    });
+    let dataUrl;
+    if (width <= SINGLE_MAX && height <= SINGLE_MAX) {
+      setStatus('Rendering full page…');
+      const shot = await sendCommand(target, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: true,
+        clip: { x: 0, y: 0, width, height, scale: 1 },
+      });
+      dataUrl = 'data:image/png;base64,' + shot.data;
+    } else {
+      // Very long page: tile it and stitch. No silent truncation.
+      const blob = await captureTiled(target, width, height);
+      dataUrl = await blobToDataURL(blob);
+    }
 
     const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
     await chrome.downloads.download({
-      url: 'data:image/png;base64,' + shot.data,
+      url: dataUrl,
       filename: `fullframe-page-${stamp}.png`,
       saveAs: false,
     });
-    setStatus(truncated ? 'Saved (page was taller than 16k px — truncated).' : 'Saved!');
+    setStatus(capped ? 'Saved (page capped at 32767 px).' : 'Saved!');
   } finally {
     await new Promise((r) => chrome.debugger.detach(target, r));
   }

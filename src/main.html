@@ -23,6 +23,11 @@
   .note b { color: #7df9ff; }
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: rgba(10,14,20,0.95); color: #7df9ff; border: 1px solid rgba(34,211,238,0.4); padding: 10px 20px; border-radius: 24px; font-size: 14px; opacity: 0; transition: all 0.25s; pointer-events: none; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .delayRow { display: flex; gap: 8px; margin-bottom: 10px; }
+  .delayRow select { background: #1c222c; border: 1px solid #2c3542; color: #e6edf3; border-radius: 12px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+  #countdown { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,14,20,0.92); z-index: 50; }
+  #countdown span { font-size: 96px; font-weight: 700; color: #7df9ff; font-variant-numeric: tabular-nums; }
+  #countdown small { color: #8b98a9; font-size: 14px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -46,6 +51,24 @@
 
 <h2>Capture a window</h2>
 <div id="winList"><p class="sub">Loading…</p></div>
+
+<h2>Delayed capture</h2>
+<div class="delayRow">
+  <select id="delayKind">
+    <option value="region">Region</option>
+    <option value="fullscreen">Fullscreen</option>
+  </select>
+  <select id="delaySecs">
+    <option value="3">3 seconds</option>
+    <option value="5" selected>5 seconds</option>
+    <option value="10">10 seconds</option>
+  </select>
+  <button class="btn" id="btnDelay" style="margin-bottom:0; width:auto; flex:1;">
+    <span class="icon">⏱</span>
+    <span class="meta"><b>Start delayed capture</b><small>Time to open menus &amp; tooltips</small></span>
+  </button>
+</div>
+<div id="countdown" style="display:none;"><span id="countNum"></span><small id="countKind"></small></div>
 
 <h2>Long screenshots</h2>
 <div class="note">
