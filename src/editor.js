@@ -430,7 +430,7 @@ function compositedDataURL() {
 
 async function copyImage() {
   if (!base.width) return;
-  await invoke('copy_data_url', { data_url: compositedDataURL() });
+  await invoke('copy_data_url', { dataUrl: compositedDataURL() });
   render();
   toast('Copied to clipboard');
 }
@@ -445,14 +445,14 @@ async function saveImage() {
     filters: [{ name: 'PNG image', extensions: ['png'] }, { name: 'JPEG image', extensions: ['jpg', 'jpeg'] }],
   });
   if (!path) return;
-  await invoke('save_data_url', { data_url: compositedDataURL(), path });
+  await invoke('save_data_url', { dataUrl: compositedDataURL(), path });
   render();
   toast('Saved');
 }
 
 async function pinImage() {
   if (!base.width) return;
-  await invoke('pin_data_url', { data_url: compositedDataURL() });
+  await invoke('pin_data_url', { dataUrl: compositedDataURL() });
   render();
   toast('Pinned to screen');
 }

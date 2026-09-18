@@ -19,9 +19,21 @@ const hint = document.getElementById('hint');
 magCtx.imageSmoothingEnabled = false;
 
 listen('overlay-preview', (e) => {
-  monitor = e.payload.monitor;
-  bg.src = e.payload.data_url;
+  // Legacy push path (kept harmless); the overlay now pulls via overlay_ready.
+  if (e.payload && e.payload.monitor) {
+    monitor = e.payload.monitor;
+    bg.src = e.payload.data_url;
+  }
 });
+
+// Pull model: ask the backend for this overlay's screenshot once our JS is
+// running, so we never miss the init data in a push-before-ready race.
+invoke('overlay_ready')
+  .then((p) => {
+    monitor = p.monitor;
+    bg.src = p.data_url;
+  })
+  .catch(() => invoke('cancel_capture'));
 
 function show(el, x, y) {
   el.style.display = 'block';
@@ -77,8 +89,13 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 
+let pendingCancel = null;
+
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
+  // A second press before the tiny-click cancel fires means double-click:
+  // swallow the pending cancel so the dblclick handler can take over.
+  if (pendingCancel) { clearTimeout(pendingCancel); pendingCancel = null; }
   dragging = true;
   startX = e.clientX; startY = e.clientY;
   hint.style.display = 'none';
@@ -90,17 +107,23 @@ document.addEventListener('mouseup', async (e) => {
   const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
   const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
   if (w < 5 || h < 5 || !monitor) {
-    // Tiny drag = treat as a click: cancel.
-    await invoke('cancel_capture');
+    // Tiny drag = treat as a click: cancel, but wait out the double-click
+    // window first so a rapid second click can still trigger dblclick.
+    if (pendingCancel) clearTimeout(pendingCancel);
+    pendingCancel = setTimeout(() => {
+      pendingCancel = null;
+      invoke('cancel_capture');
+    }, 350);
     return;
   }
-  await invoke('finish_region_capture', { monitor_id: monitor.id, x, y, w, h });
+  await invoke('finish_region_capture', { monitorId: monitor.id, x, y, w, h });
 });
 
 document.addEventListener('dblclick', async () => {
   if (!monitor) return;
+  if (pendingCancel) { clearTimeout(pendingCancel); pendingCancel = null; }
   // Double-click = capture this whole monitor.
-  await invoke('finish_region_capture', { monitor_id: monitor.id, x: 0, y: 0, w: monitor.w, h: monitor.h });
+  await invoke('finish_region_capture', { monitorId: monitor.id, x: 0, y: 0, w: monitor.w, h: monitor.h });
 });
 
 document.addEventListener('keydown', async (e) => {

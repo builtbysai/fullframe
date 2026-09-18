@@ -107,7 +107,34 @@ artifacts, sticky elements appear exactly once. Same mechanism as DevTools'
 - [ ] v0.2 (remaining) — native-messaging link between app and extension;
   settings UI (hotkeys, save location, naming); scrolling capture of native
   windows
-- [ ] v0.3 — OCR (Tesseract on-device)
+## Screen recording design (v0.3 — next milestone)
+
+Prior art: quickshotter's `recording/` module (dual-thread pipeline, trait +
+HW/CPU encoders, hand-written MP4 muxer). FullFrame adapts it:
+
+```
+src-tauri/src/recording/
+  mod.rs          RecordingManager in AppState; start/stop commands
+  pipeline.rs     capture thread (xcap paced loop, region crop) -> bounded
+                  channel(4) -> encoder thread; drops frames under backpressure
+  encoder.rs      VideoEncoder trait: new(w,h,fps) / encode_frame(rgba, pts)
+                  / flush() -> H.264 Annex-B NALs + keyframe flags
+  encoder_cpu.rs  openh264 backend — the v1 encoder on ALL platforms
+                  (testable here; HW encoders later behind the same trait)
+  mp4_muxer.rs    minimal ISOBMFF: ftyp, moov(mvhd/trak/avc1/avcC/stts/stss/
+                  stsc/stsz/stco), mdat with AVCC length-prefixed samples
+  gif_encoder.rs  stretch: gif crate, downscale + quantize, duration cap
+```
+
+- Region recording reuses the overlay: select rect -> record that rect.
+- Fullscreen recording = all monitors stitched (same as screenshot).
+- Frontend: main-window record section (region/fullscreen, MP4/GIF, 15/30
+  fps), floating indicator window (elapsed + stop, draggable), tray stop item.
+- v1 is video-only (no system-audio loopback); save via dialog on stop.
+- Verify: ffprobe validity, full-decode frame count, visual frame inspection.
+
+- [ ] v0.3 — screen recording (MP4 via openh264, region/fullscreen, indicator
+  + tray stop; GIF stretch); OCR (Tesseract on-device)
 - [ ] v1.0 — screen recording (Snipping Tool parity — required before
   "feature complete"), signed installers (Win/macOS/Linux), auto-update
   feed, first-run permission flows

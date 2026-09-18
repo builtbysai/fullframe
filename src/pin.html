@@ -18,7 +18,11 @@
 <div id="bar"><button id="close">✕ Close</button></div>
 <script src="shared.js"></script>
 <script>
-  listen('pin-image', (e) => { document.getElementById('img').src = e.payload.data_url; });
+  // Pull model: fetch the pinned image once our JS is running, so we never
+  // miss it in a push-before-ready race.
+  invoke('pin_ready').then((url) => {
+    if (url) document.getElementById('img').src = url;
+  });
   document.getElementById('close').onclick = () => invoke('close_pin');
 </script>
 </body>

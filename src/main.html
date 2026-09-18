@@ -5,7 +5,9 @@
 <title>FullFrame</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #14181f; color: #e6edf3; font: 14px system-ui, sans-serif; padding: 20px; }
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body { background: #14181f; color: #e6edf3; font: 14px system-ui, sans-serif; padding: 20px; overflow-y: auto; }
   h1 { font-size: 20px; margin-bottom: 4px; }
   h1 .dot { color: #22d3ee; }
   p.sub { color: #8b98a9; font-size: 12.5px; margin-bottom: 18px; }
@@ -24,7 +26,15 @@
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: rgba(10,14,20,0.95); color: #7df9ff; border: 1px solid rgba(34,211,238,0.4); padding: 10px 20px; border-radius: 24px; font-size: 14px; opacity: 0; transition: all 0.25s; pointer-events: none; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .delayRow { display: flex; gap: 8px; margin-bottom: 10px; }
-  .delayRow select { background: #1c222c; border: 1px solid #2c3542; color: #e6edf3; border-radius: 12px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+  .delayRow select {
+    -webkit-appearance: none; appearance: none;
+    align-self: center;
+    background: #1c222c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b98a9' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border: 1px solid #2c3542; color: #e6edf3; border-radius: 12px;
+    padding: 12px 32px 12px 14px; font-size: 13px; cursor: pointer;
+  }
+  .delayRow select:hover { border-color: #22d3ee; }
+  .delayRow select option { background: #1c222c; color: #e6edf3; }
   #countdown { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,14,20,0.92); z-index: 50; }
   #countdown span { font-size: 96px; font-weight: 700; color: #7df9ff; font-variant-numeric: tabular-nums; }
   #countdown small { color: #8b98a9; font-size: 14px; margin-top: 8px; }
@@ -70,11 +80,32 @@
 </div>
 <div id="countdown" style="display:none;"><span id="countNum"></span><small id="countKind"></small></div>
 
+<h2>Screen recording</h2>
+<div class="delayRow">
+  <select id="recFps">
+    <option value="10">10 fps</option>
+    <option value="15" selected>15 fps</option>
+    <option value="30">30 fps</option>
+  </select>
+  <button class="btn" id="btnRecRegion" style="margin-bottom:0; flex:1;">
+    <span class="icon">⏺</span>
+    <span class="meta"><b>Record region</b><small>Select an area, then record</small></span>
+  </button>
+  <button class="btn" id="btnRecFull" style="margin-bottom:0; flex:1;">
+    <span class="icon">⏺</span>
+    <span class="meta"><b>Record fullscreen</b><small>All monitors</small></span>
+  </button>
+</div>
+<div class="note" style="margin-bottom:10px;">
+  Recordings save as <b>.mp4</b> (H.264). v1 captures video only — no system audio yet.
+</div>
+
 <h2>Long screenshots</h2>
 <div class="note">
   Install the <b>FullFrame Capture</b> companion extension (in <b>extension/</b> — load unpacked in
   <b>chrome://extensions</b> with Developer mode on), then click its toolbar button on any page.
-  It renders the entire page in one shot via the browser engine — no stitching, no seams.
+  It captures the full page via the browser engine and stitches tiles on very tall pages —
+  no seams, no silent truncation.
 </div>
 
 <script src="shared.js"></script>

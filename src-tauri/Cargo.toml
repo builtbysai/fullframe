@@ -19,7 +19,12 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+openh264 = "0.9"
+crossbeam-channel = "0.5"
+gif = "0.13"
+x11rb = { version = "0.13", features = ["xtest"] }
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+

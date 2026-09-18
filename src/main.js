@@ -5,6 +5,19 @@ document.getElementById('btnLong').onclick = () => {
   toast('Install the companion extension from the extension/ folder — see notes below.');
 };
 
+// Screen recording.
+const recFps = () => parseInt(document.getElementById('recFps').value, 10);
+document.getElementById('btnRecRegion').onclick = () => invoke('begin_region_record', { fps: recFps() });
+document.getElementById('btnRecFull').onclick = async () => {
+  try {
+    await invoke('start_recording', { fps: recFps() });
+  } catch (err) {
+    toast('Recording failed: ' + err);
+  }
+};
+listen('recording_started', () => toast('Recording… use the floating bar or tray to stop.'));
+listen('recording_stopped', () => toast('Recording finished.'));
+
 // Delayed capture: the backend counts down via `delay_tick` events, hides
 // this window right before the shot, then captures.
 document.getElementById('btnDelay').onclick = () => {

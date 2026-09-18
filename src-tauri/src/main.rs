@@ -13,9 +13,11 @@ use tauri::{
     image::Image as TauriImage,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+use fullframe::recording;
 
 // ---------------------------------------------------------------- state ---
 
@@ -30,11 +32,22 @@ struct MonitorGeo {
 }
 
 #[derive(Default)]
-struct AppState {
+pub(crate) struct AppState {
     previews: Mutex<HashMap<u32, Vec<u8>>>, // monitor id -> full PNG bytes
     geos: Mutex<HashMap<u32, MonitorGeo>>,
     capture: Mutex<Option<Vec<u8>>>, // latest finished capture (PNG bytes)
     overlay_open: Mutex<bool>,
+    record_mode: Mutex<Option<u32>>, // Some(fps): overlay selection feeds screen recording
+    pending_pin: Mutex<Option<String>>, // data URL for the pin window to pull on load
+}
+
+/// Set/clear record mode for the region overlay (used by recording commands).
+pub(crate) fn set_record_mode(app: &AppHandle, fps: Option<u32>) {
+    if let Some(st) = app.try_state::<AppState>() {
+        if let Ok(mut g) = st.record_mode.lock() {
+            *g = fps;
+        }
+    }
 }
 
 // ------------------------------------------------------------- helpers ---
@@ -202,22 +215,8 @@ fn begin_region_capture(app: AppHandle) -> Result<(), String> {
                     return Err(format!("could not open capture overlay: {e}"));
                 }
             };
-        let png = previews.get(&g.id).cloned().unwrap_or_default();
-        let info = PreviewInfo {
-            id: g.id,
-            x: g.x,
-            y: g.y,
-            w: g.w,
-            h: g.h,
-            scale: g.scale,
-        };
-        let _ = win.emit(
-            "overlay-preview",
-            serde_json::json!({
-                "monitor": info,
-                "data_url": data_url(&png),
-            }),
-        );
+        // The overlay pulls its screenshot via `overlay_ready` once its JS is
+        // running (no push-before-ready race).
         let _ = win.set_focus();
     }
     drop(previews);
@@ -257,6 +256,19 @@ fn finish_region_capture(
     let py = (y.max(0.0) * geo.scale as f64).round() as u32;
     let pw = (w * geo.scale as f64).round() as u32;
     let ph = (h * geo.scale as f64).round() as u32;
+    // Record mode: the selection becomes a recording region in desktop
+    // physical pixels (same space the recording pipeline stitches).
+    let record_fps: Option<u32> = st.record_mode.lock().map_err(|e| e.to_string())?.take();
+    if let Some(fps) = record_fps {
+        close_overlays(&app);
+        let region = recording::pipeline::RecordSource::Region {
+            x: geo.x + px as i32,
+            y: geo.y + py as i32,
+            w: pw.max(16),
+            h: ph.max(16),
+        };
+        return recording::begin(&app, region, fps);
+    }
     let cropped = crop_png(&png, px, py, pw, ph)?;
     *st.capture.lock().map_err(|e| e.to_string())? = Some(cropped);
     close_overlays(&app);
@@ -266,7 +278,78 @@ fn finish_region_capture(
 
 #[tauri::command]
 fn cancel_capture(app: AppHandle) {
+    set_record_mode(&app, None);
     close_overlays(&app);
+}
+
+#[derive(Serialize)]
+struct OverlayReady {
+    monitor: PreviewInfo,
+    data_url: String,
+}
+
+/// Pull model for overlay init: the overlay window asks for its screenshot
+/// after its JS is running, so there is no push-before-ready race with the
+/// `overlay-preview` event. The monitor id comes from the window label
+/// (`overlay-{id}`).
+#[tauri::command]
+fn overlay_ready(
+    window: Window,
+    state: tauri::State<'_, AppState>,
+) -> Result<OverlayReady, String> {
+    let id: u32 = window
+        .label()
+        .strip_prefix("overlay-")
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| "bad overlay window label".to_string())?;
+    let geo = state
+        .geos
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| "unknown monitor".to_string())?;
+    let png = state
+        .previews
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| "no preview stored".to_string())?;
+    Ok(OverlayReady {
+        monitor: PreviewInfo {
+            id: geo.id,
+            x: geo.x,
+            y: geo.y,
+            w: geo.w,
+            h: geo.h,
+            scale: geo.scale,
+        },
+        data_url: data_url(&png),
+    })
+}
+
+/// Pull model for pin init: the pin window fetches its image after load,
+/// avoiding the same push-before-ready race.
+#[tauri::command]
+fn pin_ready(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
+    Ok(state.pending_pin.lock().map_err(|e| e.to_string())?.take())
+}
+
+/// Open the region overlay in record mode; the selection comes back through
+/// `finish_region_capture`, which hands the region to the recording pipeline.
+#[tauri::command]
+fn begin_region_record(app: AppHandle, fps: Option<u32>) -> Result<(), String> {
+    if let Some(m) = app.try_state::<recording::RecordingManager>() {
+        if m.is_recording() {
+            if let Some(w) = app.get_webview_window("recorder") {
+                let _ = w.set_focus();
+            }
+            return Err("already recording".to_string());
+        }
+    }
+    set_record_mode(&app, Some(fps.unwrap_or(15)));
+    begin_region_capture(app)
 }
 
 /// Capture all monitors merged into one image (handles negative offsets).
@@ -326,7 +409,10 @@ fn capture_delayed(app: AppHandle, kind: String, seconds: u64) {
             let _ = w.hide();
         }
         std::thread::sleep(std::time::Duration::from_millis(400));
-        let _ = app.emit("delay_tick", serde_json::json!({ "kind": kind, "remaining": 0 }));
+        let _ = app.emit(
+            "delay_tick",
+            serde_json::json!({ "kind": kind, "remaining": 0 }),
+        );
         let res = match kind.as_str() {
             "fullscreen" => capture_fullscreen(app.clone()),
             _ => begin_region_capture(app.clone()),
@@ -346,7 +432,8 @@ fn capture_delayed(app: AppHandle, kind: String, seconds: u64) {
 }
 
 #[derive(Serialize)]
-struct WindowInfo {    id: u32,
+struct WindowInfo {
+    id: u32,
     title: String,
     app_name: String,
     width: u32,
@@ -454,7 +541,14 @@ fn pin_data_url(app: AppHandle, data_url: String) -> Result<(), String> {
     if let Some(prev) = app.get_webview_window("pin") {
         let _ = prev.close();
     }
-    let win = WebviewWindowBuilder::new(&app, "pin", WebviewUrl::App("pin.html".into()))
+    // The pin window pulls its image via `pin_ready` once its JS is running
+    // (no push-before-ready race).
+    if let Some(st) = app.try_state::<AppState>() {
+        if let Ok(mut p) = st.pending_pin.lock() {
+            *p = Some(data_url.clone());
+        }
+    }
+    let _win = WebviewWindowBuilder::new(&app, "pin", WebviewUrl::App("pin.html".into()))
         .title("FullFrame Pin")
         .transparent(false)
         .decorations(false)
@@ -467,7 +561,6 @@ fn pin_data_url(app: AppHandle, data_url: String) -> Result<(), String> {
         .visible(true)
         .build()
         .map_err(|e| e.to_string())?;
-    let _ = win.emit("pin-image", serde_json::json!({ "data_url": data_url }));
     Ok(())
 }
 
@@ -487,12 +580,36 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let windows = MenuItem::with_id(app, "tray-windows", "Capture window…", true, None::<&str>)
         .map_err(|e| e.to_string())?;
+    let rec_region = MenuItem::with_id(app, "tray-rec-region", "Record region", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let rec_full = MenuItem::with_id(
+        app,
+        "tray-rec-full",
+        "Record fullscreen",
+        true,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let rec_stop = MenuItem::with_id(app, "tray-rec-stop", "Stop recording", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
     let open = MenuItem::with_id(app, "tray-open", "Open FullFrame", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let quit = MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(app, &[&region, &full, &windows, &open, &quit])
-        .map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &region,
+            &full,
+            &windows,
+            &rec_region,
+            &rec_full,
+            &rec_stop,
+            &open,
+            &quit,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
 
     // Icon: decode the bundled PNG to raw RGBA for the tray.
     let icon_bytes: &[u8] = include_bytes!("../icons/icon.png");
@@ -519,6 +636,25 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
                     let _ = w.set_focus();
                 }
             }
+            "tray-rec-region" => {
+                let _ = begin_region_record(app.clone(), None);
+            }
+            "tray-rec-full" => {
+                let _ = recording::start_recording(app.clone(), None);
+            }
+            "tray-rec-stop" => {
+                let recording = app
+                    .try_state::<recording::RecordingManager>()
+                    .map(|m| m.is_recording())
+                    .unwrap_or(false);
+                if recording {
+                    // The indicator window runs the stop -> save-dialog flow.
+                    let _ = app.emit("recording_stop_requested", serde_json::json!({}));
+                } else if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
             "tray-quit" => app.exit(0),
             _ => {}
         })
@@ -530,6 +666,7 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .manage(recording::RecordingManager::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
@@ -543,6 +680,9 @@ fn main() {
             begin_region_capture,
             finish_region_capture,
             cancel_capture,
+            overlay_ready,
+            pin_ready,
+            begin_region_record,
             capture_fullscreen,
             capture_delayed,
             list_windows,
@@ -552,6 +692,11 @@ fn main() {
             save_data_url,
             pin_data_url,
             close_pin,
+            recording::start_recording,
+            recording::stop_recording,
+            recording::save_recording,
+            recording::delete_recording,
+            recording::recording_status,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
